@@ -621,6 +621,8 @@ transition-all duration-700 ease-out origin-top z-50">
     }
 
     document.addEventListener("keydown", e => {
+      const tag = document.activeElement && document.activeElement.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return; // don't hijack keys while typing in a form field
       if (e.code === "Enter" || e.code === "Space") { e.preventDefault(); jump(); }
     });
 
@@ -1003,6 +1005,328 @@ menu.classList.add(
     });
   }
 </script>
+
+  <!-- ═══════════════════════════════════
+       AI Chatbot Widget
+       ═══════════════════════════════════ -->
+  <style>
+    #chat-toggle-btn {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 1000;
+      width: 56px;
+      height: 56px;
+      border-radius: 9999px;
+      background: linear-gradient(135deg, #699cff, #9c48ea);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 0 20px rgba(105,156,255,0.4), 0 4px 20px rgba(0,0,0,0.3);
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+    #chat-toggle-btn:hover {
+      transform: scale(1.08);
+      box-shadow: 0 0 30px rgba(105,156,255,0.6), 0 4px 24px rgba(0,0,0,0.4);
+    }
+    #chat-toggle-btn .material-symbols-outlined {
+      font-size: 28px;
+      color: #ffffff;
+    }
+    #chat-window {
+      position: fixed;
+      bottom: 92px;
+      right: 24px;
+      z-index: 1000;
+      width: 340px;
+      max-width: calc(100vw - 32px);
+      height: 460px;
+      max-height: calc(100vh - 140px);
+      border-radius: 16px;
+      overflow: hidden;
+      display: none;
+      flex-direction: column;
+      background: rgba(17, 19, 24, 0.85);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(105,156,255,0.15);
+      box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+    }
+    #chat-window.open { display: flex; }
+    #chat-header {
+      padding: 14px 16px;
+      background: rgba(28, 32, 38, 0.6);
+      border-bottom: 1px solid rgba(105,156,255,0.12);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #chat-header .material-symbols-outlined {
+      color: #699cff;
+      font-size: 22px;
+    }
+    #chat-header-text { display: flex; flex-direction: column; }
+    #chat-header-title {
+      font-family: 'Manrope', sans-serif;
+      font-weight: 600;
+      font-size: 14px;
+      color: #e2e5ef;
+    }
+    #chat-header-status {
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      color: #a8abb5;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    #chat-header-status::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #4ade80;
+      display: inline-block;
+    }
+    #chat-close-btn {
+      margin-left: auto;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #a8abb5;
+      display: flex;
+    }
+    #chat-close-btn:hover { color: #e2e5ef; }
+    #chat-messages {
+      flex: 1;
+      padding: 14px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    #chat-messages::-webkit-scrollbar { width: 5px; }
+    #chat-messages::-webkit-scrollbar-thumb { background: rgba(105,156,255,0.25); border-radius: 4px; }
+    .chat-msg {
+      font-family: 'Inter', sans-serif;
+      font-size: 13.5px;
+      line-height: 1.45;
+      padding: 9px 13px;
+      border-radius: 12px;
+      max-width: 85%;
+      word-wrap: break-word;
+    }
+    .chat-msg.bot {
+      align-self: flex-start;
+      background: rgba(105,156,255,0.12);
+      color: #dfe3ec;
+      border-bottom-left-radius: 4px;
+    }
+    .chat-msg.user {
+      align-self: flex-end;
+      background: linear-gradient(135deg, #699cff, #5c7fe6);
+      color: #ffffff;
+      border-bottom-right-radius: 4px;
+    }
+    .chat-msg.typing {
+      align-self: flex-start;
+      background: rgba(105,156,255,0.12);
+      color: #a8abb5;
+      font-style: italic;
+    }
+    #chat-input-area {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-top: 1px solid rgba(105,156,255,0.12);
+      background: rgba(12, 14, 18, 0.5);
+    }
+    #chat-input {
+      flex: 1;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(105,156,255,0.15);
+      border-radius: 20px;
+      padding: 9px 14px;
+      color: #e2e5ef;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      outline: none;
+    }
+    #chat-input:focus { border-color: rgba(105,156,255,0.5); }
+    #chat-input::placeholder { color: #6b6f79; }
+    #chat-send-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #699cff;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.2s ease;
+    }
+    #chat-send-btn:hover { background: #8fb3ff; }
+    #chat-send-btn .material-symbols-outlined { color: #001e4a; font-size: 18px; }
+  </style>
+
+  <button id="chat-toggle-btn" aria-label="Open chat assistant">
+    <span class="material-symbols-outlined">smart_toy</span>
+  </button>
+
+  <div id="chat-window">
+    <div id="chat-header">
+      <span class="material-symbols-outlined">smart_toy</span>
+      <div id="chat-header-text">
+        <div id="chat-header-title">Ask Neeraj's AI</div>
+        <div id="chat-header-status">Online</div>
+      </div>
+      <button id="chat-close-btn" aria-label="Close chat">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div id="chat-messages"></div>
+    <div id="chat-input-area">
+      <input type="text" id="chat-input" placeholder="Ask me anything..." autocomplete="off">
+      <button id="chat-send-btn" aria-label="Send message">
+        <span class="material-symbols-outlined">send</span>
+      </button>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    // ── Knowledge base pulled directly from the portfolio content on this page ──
+    const KB = [
+      {
+        keywords: ["btech", "b.tech", "college", "university", "degree", "graduat", "bachelor", "computer science", "engineering college"],
+        answer: "Neeraj completed his B.Tech in Computer Science Engineering at APJ Abdul Kalam Technological University (2021 – 2025), graduating with a CGPA of 9.15."
+      },
+      {
+        keywords: ["12th", "plus two", "higher secondary", "school", "intermediate"],
+        answer: "Neeraj completed his Higher Secondary Education (Computer Science stream) from 2019 to 2021, securing 98.3% in core subjects."
+      },
+      {
+        keywords: ["education", "study", "qualification", "academic"],
+        answer: "Education: B.Tech in Computer Science Engineering, APJ Abdul Kalam Technological University (2021–2025, CGPA 9.15). Before that, Higher Secondary Education in Computer Science (2019–2021, 98.3%)."
+      },
+      {
+        keywords: ["work", "job", "experience", "company", "employ", "trainee", "career"],
+        answer: "Neeraj is currently working as a Python Trainee at ZKTeco Biometrics India Pvt Ltd, Bangalore (Feb 2026 – Present), building dynamic web applications with Django and gaining hands-on experience in REST APIs and database management."
+      },
+      {
+        keywords: ["skill", "tech stack", "technology", "language", "framework", "know", "proficient"],
+        answer: "Core skills: Python (Django) – 90%, REST APIs – 85%, SQL & PostgreSQL – 85%, Frontend (HTML/CSS/JS) – 80%, plus AI/ML for data analysis and insights."
+      },
+      {
+        keywords: ["project", "built", "portfolio work", "brain tumor", "check balance"],
+        answer: "Featured projects: 1) Brain Tumor Detection System — detects tumors from MRI scans using CNN feature extraction and Genetic Algorithms for optimization. 2) Check Balance — a web app for viewing real-time account balance updates (HTML, CSS, JS)."
+      },
+      {
+        keywords: ["contact", "email", "phone", "number", "reach", "mail"],
+        answer: "You can reach Neeraj at devbyneeraj@gmail.com or +91 9744733146."
+      },
+      {
+        keywords: ["github", "linkedin", "instagram", "whatsapp", "social"],
+        answer: "GitHub: github.com/NEERAJ-2003 | LinkedIn: linkedin.com/in/neeraj-k-r-a1456b294 | Instagram: @_neeraj.kr_ | WhatsApp: +91 9744733146"
+      },
+      {
+        keywords: ["who is", "about him", "who are you", "introduce", "name"],
+        answer: "This is Neeraj K R — a Python Developer specializing in Django, REST APIs, and database design, currently working as a Python Trainee at ZKTeco Biometrics India Pvt Ltd."
+      },
+      {
+        keywords: ["leetcode", "cgpa", "score", "achievement", "stats"],
+        answer: "Quick stats: 100+ LeetCode problems solved, 5+ projects built, 9.15 CGPA in B.Tech."
+      },
+    ];
+
+    const FALLBACK = "I can answer questions about Neeraj's education, work experience, skills, projects, or contact details.";
+
+    function findAnswer(question) {
+      const q = question.toLowerCase();
+      for (const entry of KB) {
+        if (entry.keywords.some(k => q.includes(k))) {
+          return entry.answer;
+        }
+      }
+      return FALLBACK;
+    }
+
+    const toggleBtn = document.getElementById("chat-toggle-btn");
+    const closeBtn  = document.getElementById("chat-close-btn");
+    const chatWindow = document.getElementById("chat-window");
+    const messages   = document.getElementById("chat-messages");
+    const input      = document.getElementById("chat-input");
+    const sendBtn    = document.getElementById("chat-send-btn");
+
+    let greeted = false;
+
+    function addMessage(text, sender) {
+      const div = document.createElement("div");
+      div.className = "chat-msg " + sender;
+      div.textContent = text;
+      messages.appendChild(div);
+      messages.scrollTop = messages.scrollHeight;
+      return div;
+    }
+
+    // Types out `text` into `el` one character at a time
+    function typeOutMessage(el, text, speed = 18) {
+      let i = 0;
+      el.textContent = "";
+      const timer = setInterval(() => {
+        el.textContent += text.charAt(i);
+        i++;
+        messages.scrollTop = messages.scrollHeight;
+        if (i >= text.length) clearInterval(timer);
+      }, speed);
+    }
+
+    function openChat() {
+      chatWindow.classList.add("open");
+      if (!greeted) {
+        addMessage("Hey! I'm Neeraj's portfolio assistant. Ask me about his education, experience, skills, or projects.", "bot");
+        greeted = true;
+      }
+      input.focus();
+    }
+
+    function closeChat() {
+      chatWindow.classList.remove("open");
+    }
+
+    toggleBtn.addEventListener("click", () => {
+      chatWindow.classList.contains("open") ? closeChat() : openChat();
+    });
+    closeBtn.addEventListener("click", closeChat);
+
+    function sendMessage() {
+      const text = input.value.trim();
+      if (!text) return;
+      addMessage(text, "user");
+      input.value = "";
+
+      const typingEl = addMessage("Thinking...", "typing");
+
+      // Simulate a natural "thinking" pause before responding (0.9s – 1.8s)
+      const thinkDelay = 900 + Math.random() * 900;
+
+      setTimeout(() => {
+        const answer = findAnswer(text);
+        typingEl.className = "chat-msg bot";
+        typeOutMessage(typingEl, answer, 16);
+      }, thinkDelay);
+    }
+
+    sendBtn.addEventListener("click", sendMessage);
+    input.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") sendMessage();
+    });
+  })();
+  </script>
 
 </body>
 </html>
